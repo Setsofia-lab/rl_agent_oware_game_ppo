@@ -34,17 +34,46 @@ class DDQNAgent:
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
 
-    def act(self, state):
+    # def act(self, state):
+    #     if np.random.rand() <= self.epsilon:
+    #         return random.randrange(self.action_size)
+    #     q_values = self.model.predict(np.array([state]), verbose=0)
+    #     return np.argmax(q_values[0])
+    
+    def act(self, state, valid_actions=None):
+        """
+        Chooses an action based on the current policy.
+
+        Args:
+            state (array-like): Current board state.
+            valid_actions (list): List of valid action indices.
+
+        Returns:
+            int: Chosen action index.
+        """
         if np.random.rand() <= self.epsilon:
+            # Random exploration: Choose only from valid actions
+            if valid_actions:
+                return np.random.choice(valid_actions)
             return random.randrange(self.action_size)
+        
         q_values = self.model.predict(np.array([state]), verbose=0)
+        if valid_actions:
+            # Mask invalid actions
+            q_values = [q if i in valid_actions else -np.inf for i, q in enumerate(q_values[0])]
+            return np.argmax(q_values)
+        
         return np.argmax(q_values[0])
+
+
 
     def train(self, batch_size):
         if len(self.memory) < batch_size:
-            return
+            return 0  # Return 0 loss if there aren't enough samples
 
         minibatch = random.sample(self.memory, batch_size)
+        total_loss = 0
+
         for state, action, reward, next_state, done in minibatch:
             target = self.model.predict(np.array([state]), verbose=0)[0]
             if done:
@@ -53,9 +82,13 @@ class DDQNAgent:
                 next_action = np.argmax(self.model.predict(np.array([next_state]), verbose=0)[0])
                 target[action] = reward + self.gamma * self.target_model.predict(np.array([next_state]), verbose=0)[0][next_action]
 
-            self.model.fit(np.array([state]), np.array([target]), epochs=1, verbose=0)
+            history = self.model.fit(np.array([state]), np.array([target]), epochs=1, verbose=0)
+            total_loss += history.history['loss'][0]  # Accumulate loss from this batch
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+
+        return total_loss / batch_size  # Return average loss
+
 
 
