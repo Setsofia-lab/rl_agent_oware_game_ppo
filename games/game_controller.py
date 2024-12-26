@@ -1,3 +1,8 @@
+from agents import random_agent
+# from games import rule_engine, game_state
+from rule_engine import RuleEngine
+from game_state import GameState
+
 class GameController:
     def __init__(self, agent1, agent2):
         self.agent1 = agent1
