@@ -166,7 +166,3 @@ Oware is a two-player strategy game played on a board with two rows of six pits 
    - Optimizes a policy directly using gradient descent.
    - Stabilizes training with a clipped objective to prevent drastic policy updates.
    - Encourages exploration, making it well-suited for strategic games.
-
----
-
-Would you like me to further elaborate on any specific part, or do you need assistance in any other area?
