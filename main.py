@@ -39,7 +39,8 @@ def train_agent(agent_type, state_size, action_size, num_episodes, batch_size, v
             elif agent_type == "ppo":
                 episode_entropy += agent.train(state, action, reward, next_state, done)
 
-            state = next_state
+            state = game_controller.get_flattened_state()
+
 
         # Update target network for DDQN
         if agent_type == "ddqn" and episode % 10 == 0:
@@ -49,7 +50,10 @@ def train_agent(agent_type, state_size, action_size, num_episodes, batch_size, v
         entropies.append(episode_entropy)
 
         print(f"Episode {episode + 1}/{num_episodes} completed.")
-        return agent, losses, entropies
+
+    # Return after all episodes are done
+    return agent, losses, entropies
+
 
 
 

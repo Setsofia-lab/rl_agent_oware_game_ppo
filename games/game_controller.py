@@ -13,28 +13,26 @@ class GameController:
     def reset(self):
         self.state = GameState()
         return self.state.get_state()
+    
+    def get_flattened_state(self):
+        """
+        Returns the current board state as a flattened array.
+        """
+        flat_board = np.array(self.state.board.board).flatten()
+        store = np.array(self.state.board.store)
+        return np.concatenate((flat_board, store))
 
-    # def step(self, action):
-    #     current_player = self.state.current_player
-    #     board, store = self.state.board, self.state.board.store
-
-    #     if not board.is_valid_move(current_player, action // 6, action % 6):
-    #         raise ValueError(f"Invalid move by player {current_player}: {action}")
-
-    #     row, pit = divmod(action, 6)
-    #     last_row, last_pit = board.sow(row, pit)
-    #     captured = board.capture_seeds(current_player, last_row, last_pit)
-    #     reward = RuleEngine.calculate_reward(current_player, captured)
-    #     done = RuleEngine.is_game_over(board)
-
-    #     self.visualize_board()
-
-    #     if not done:
-    #         self.state.switch_player()
-
-    #     return board.board, reward, done
 
     def step(self, action):
+        """
+        Executes the action for the current player and updates the game state.
+
+        Args:
+            action (int): Action chosen by the current player.
+
+        Returns:
+            tuple: (flattened_state, reward, done, valid_actions)
+        """
         current_player = self.state.current_player
         board = self.state.board
 
@@ -42,12 +40,6 @@ class GameController:
         valid_actions = [
             i for i in range(6) if board.is_valid_move(current_player, current_player, i)
         ]
-
-        # Debugging: Print board state and valid actions
-        print(f"Player {current_player}'s turn.")
-        print(f"Current Board: {board.board}")
-        print(f"Valid Actions: {valid_actions}")
-        print(f"Chosen Action: {action}")
 
         # Ensure the action is valid
         if action not in valid_actions:
@@ -64,11 +56,15 @@ class GameController:
         if not done:
             self.state.switch_player()
 
-        # Return the new state, reward, and game status
-        return board.board, reward, done, valid_actions
+        # Flatten the board state and append the stores
+        flattened_state = np.concatenate(
+            [np.array(board.board).flatten(), np.array(board.store)]
+        )
 
+        # Debugging: Print the flattened state
+        print(f"Flattened State: {flattened_state}")
 
-
+        return flattened_state, reward, done, valid_actions
 
     def visualize_board(self):
         """Displays the current state of the Oware board."""
