@@ -41,8 +41,13 @@ class PPOAgent:
         Returns:
             int: Chosen action.
         """
-        # Ensure state is a flat 1D numpy array
-        state = np.array(state, dtype=np.float32).flatten()
+        try:
+            # Ensure state is a flat 1D numpy array
+            state = np.array(state, dtype=np.float32).flatten()
+        except Exception as e:
+            print(f"Error converting state to numpy array: {e}")
+            print(f"State content: {state}")
+            raise e
 
         # Debugging: Print state shape and policy probabilities
         print(f"Processed State Shape: {state.shape}")

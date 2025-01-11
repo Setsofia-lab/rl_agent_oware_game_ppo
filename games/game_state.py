@@ -9,5 +9,5 @@ class GameState:
     def switch_player(self):
         self.current_player = 1 - self.current_player
     
-    def get_state(self):
+    def get_flattened_state(self):
         return self.board.board, self.board.store

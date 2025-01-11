@@ -8,11 +8,11 @@ class GameController:
     def __init__(self, agent1, agent2):
         self.agent1 = agent1
         self.agent2 = agent2
-        self.state = GameState()
+        self.state = None
 
     def reset(self):
         self.state = GameState()
-        return self.state.get_state()
+        return self.state.get_flattened_state()
     
     def get_flattened_state(self):
         """
@@ -57,32 +57,36 @@ class GameController:
             self.state.switch_player()
 
         # Flatten the board state and append the stores
-        flattened_state = np.concatenate(
-            [np.array(board.board).flatten(), np.array(board.store)]
-        )
+        board_array = np.array(self.state.board.board, dtype=np.float32)
+        store_array = np.array(self.state.board.store, dtype=np.float32)
 
-        # Debugging: Print the flattened state
-        print(f"Flattened State: {flattened_state}")
+        if board_array.ndim != 2 or store_array.ndim != 1:
+            print("Error: Unexpected board or store dimensions!")
+            print(f"Board Array Shape: {board_array.shape}, Content: {board_array}")
+            print(f"Store Array Shape: {store_array.shape}, Content: {store_array}")
 
+        flattened_state = np.concatenate([board_array.flatten(), store_array])
+
+        print(f"Flattened State in step: {flattened_state}, Shape: {flattened_state.shape}")
         return flattened_state, reward, done, valid_actions
 
-    def visualize_board(self):
-        """Displays the current state of the Oware board."""
-        fig, ax = plt.subplots()
-        board = np.array(self.state.board.board)
-        store = self.state.board.store
+    # def visualize_board(self):
+    #     """Displays the current state of the Oware board."""
+    #     fig, ax = plt.subplots()
+    #     board = np.array(self.state.board.board)
+    #     store = self.state.board.store
 
-        # Draw the board as a grid
-        ax.matshow(np.zeros((2, 6)), cmap="Greys", alpha=0.1)
-        for (i, j), val in np.ndenumerate(board):
-            ax.text(j, i, f'{val}', va='center', ha='center', color='black', fontsize=12)
+    #     # Draw the board as a grid
+    #     ax.matshow(np.zeros((2, 6)), cmap="Greys", alpha=0.1)
+    #     for (i, j), val in np.ndenumerate(board):
+    #         ax.text(j, i, f'{val}', va='center', ha='center', color='black', fontsize=12)
 
-        # Draw the player stores
-        ax.text(-1, 0.5, f'P1 Store: {store[0]}', va='center', ha='right', fontsize=10)
-        ax.text(6, 1.5, f'P2 Store: {store[1]}', va='center', ha='left', fontsize=10)
+    #     # Draw the player stores
+    #     ax.text(-1, 0.5, f'P1 Store: {store[0]}', va='center', ha='right', fontsize=10)
+    #     ax.text(6, 1.5, f'P2 Store: {store[1]}', va='center', ha='left', fontsize=10)
 
-        # Remove axes
-        ax.axis('off')
+    #     # Remove axes
+    #     ax.axis('off')
 
-        plt.pause(0.5)  # Pause to show the updated state
-        plt.close(fig)
+    #     plt.pause(0.5)  # Pause to show the updated state
+    #     plt.close(fig)
