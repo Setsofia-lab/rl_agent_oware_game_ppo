@@ -1,115 +1,216 @@
-import argparse
-from games.board import Board
-from games.game_controller import GameController
-from agents.ddqn_agent import DDQNAgent
-from agents.ppo_agent import PPOAgent
-from agents.random_agent import RandomAgent
-from utils.metrics import calculate_win_rate, calculate_average_reward
 
 
-def train_agent(agent_type, state_size, action_size, num_episodes, batch_size, visualize=False):
-    if agent_type == "ddqn":
-        agent = DDQNAgent(state_size, action_size)
-    elif agent_type == "ppo":
-        agent = PPOAgent(state_size, action_size)
-    else:
-        raise ValueError("Unsupported agent type. Use 'ddqn' or 'ppo'.")
+import numpy as np
+import random
 
-    opponent = RandomAgent(action_size)
-    game_controller = GameController(agent, opponent)
-    losses, entropies = [], []
+class Board:
+    def __init__(self):
+        self.board = np.full((2, 6), 4)
+        self.stores = [0, 0]
+        self.territories = [[0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5]]
+        self.captured_territories = [0, 0]
 
-    for episode in range(num_episodes):
-        state = game_controller.reset()
-        done = False
-        episode_loss, episode_entropy = 0, 0
+    def reset(self):
+        self.board = np.full((2, 6), 4)
+        self.stores = [0, 0]
 
-        while not done:
-            _, _, _, valid_actions = game_controller.step(0)  # Get valid actions
-            action = agent.act(state, valid_actions=valid_actions)
-            next_state, reward, done, valid_actions = game_controller.step(action)
+    def capture_seeds(self, player, row, col):
+        seeds = self.board[row, col]
+        self.stores[player] += seeds
+        self.board[row, col] = 0
 
-            if visualize:
-                game_controller.visualize_board()
+    def is_empty(self):
+        return self.board.sum() == 0
 
-            if agent_type == "ddqn":
-                agent.remember(state, action, reward, next_state, done)
-                loss = agent.train(batch_size)
-                episode_loss += loss if loss else 0  # Accumulate loss only if it's not None
-            elif agent_type == "ppo":
-                episode_entropy += agent.train(state, action, reward, next_state, done)
+    def has_valid_moves(self, player):
+        row = 0 if player == 0 else 1
+        return any(self.board[row, col] > 0 for col in self.territories[player])
 
-            state = game_controller.get_flattened_state()
+    def format_board(self):
+        return f"[[{' '.join(map(str, self.board[0]))}]\n [{' '.join(map(str, self.board[1]))}]]"
 
 
-        # Update target network for DDQN
-        if agent_type == "ddqn" and episode % 10 == 0:
-            agent.update_target_model()
+class Player:
+    def __init__(self, player_id):
+        self.player_id = player_id
+        self.score = 0
+        self.captured_territories = 0
 
-        losses.append(episode_loss)
-        entropies.append(episode_entropy)
+    def select_move(self, board, valid_moves):
+        # Filter out moves with no seeds
+        row = self.get_row()
+        available_moves = [move for move in valid_moves 
+                         if board.board[row, move] > 0]
+        if not available_moves:
+            return None
+        return random.choice(available_moves)
 
-        print(f"Episode {episode + 1}/{num_episodes} completed.")
+    def get_row(self):
+        return 0 if self.player_id == 0 else 1
 
-    # Return after all episodes are done
-    return agent, losses, entropies
-
-
-
-
-def evaluate_agents(agent1, agent2, num_games):
-    print(f"Evaluating {agent1.__class__.__name__} vs {agent2.__class__.__name__}...")
-
-    agent1_win_rate = calculate_win_rate(agent1, agent2, num_games)
-    agent2_win_rate = 1 - agent1_win_rate
-    agent1_avg_reward = calculate_average_reward(agent1, num_games)
-    agent2_avg_reward = calculate_average_reward(agent2, num_games)
-
-    print(f"Results:\n")
-    print(f"{agent1.__class__.__name__}:")
-    print(f"- Win Rate: {agent1_win_rate * 100:.2f}%")
-    print(f"- Average Reward: {agent1_avg_reward:.2f}")
-    print(f"\n{agent2.__class__.__name__}:")
-    print(f"- Win Rate: {agent2_win_rate * 100:.2f}%")
-    print(f"- Average Reward: {agent2_avg_reward:.2f}")
+    def get_player_number(self):
+        return self.player_id + 1
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Train and evaluate Oware RL agents.")
-    parser.add_argument("--train", choices=["ddqn", "ppo"], help="Type of agent to train.")
-    parser.add_argument("--evaluate", action="store_true", help="Enable evaluation mode.")
-    parser.add_argument("--episodes", type=int, default=100, help="Number of training episodes.")
-    parser.add_argument("--games", type=int, default=50, help="Number of evaluation games.")
-    parser.add_argument("--batch_size", type=int, default=64, help="Batch size for training.")
-    parser.add_argument("--visualize", action="store_true", help="Enable board visualization during training.")
+class RuleEngine:
+    def __init__(self):
+        self.winning_territories = 3
 
-    args = parser.parse_args()
+    def is_valid_move(self, player, action, board):
+        if action is None:
+            return False
+        row = player.get_row()
+        return (action in board.territories[player.player_id] and 
+                board.board[row, action] > 0)
 
-    state_size = 12  # Board size: 12 pits
-    action_size = 12  # Actions: selecting any of the 12 pits
+    def execute_move(self, player, action, board):
+        try:
+            row = player.get_row()
+            seeds = board.board[row, action]
+            board.board[row, action] = 0
 
-    if args.train:
-        print(f"Training {args.train.upper()} agent...")
-        agent, losses, entropies = train_agent(args.train, state_size, action_size, args.episodes, args.batch_size, visualize=args.visualize)
+            current_row, current_col = row, action
+            while seeds > 0:
+                current_col = (current_col + 1) % 6
+                if current_col == 0:
+                    current_row = 1 - current_row
+                board.board[current_row, current_col] += 1
+                seeds -= 1
 
-        if args.train == "ddqn":
-            print(f"Training Loss (DDQN): {sum(losses) / len(losses):.2f}")
-        elif args.train == "ppo":
-            print(f"Policy Entropy (PPO): {sum(entropies) / len(entropies):.2f}")
+            return current_row, current_col
+        except Exception as e:
+            print(f"Error executing move: {e}")
+            return row, action
 
-    if args.evaluate:
-        print("Evaluating trained agents...")
-        ddqn_agent = DDQNAgent(state_size, action_size)  # Load trained DDQN agent
-        ppo_agent = PPOAgent(state_size, action_size)  # Load trained PPO agent
-        random_agent = RandomAgent(action_size)
+    def check_capture(self, player, opponent, final_row, final_col, board):
+        try:
+            if (board.board[final_row, final_col] == 4 and 
+                final_col in board.territories[opponent.player_id]):
+                board.territories[opponent.player_id].remove(final_col)
+                if final_col not in board.territories[player.player_id]:
+                    board.territories[player.player_id].append(final_col)
+                    board.captured_territories[player.player_id] += 1
+                    player.captured_territories += 1
+        except Exception as e:
+            print(f"Error in capture: {e}")
 
-        # Evaluate DDQN vs Random
-        evaluate_agents(ddqn_agent, random_agent, args.games)
-        # Evaluate PPO vs Random
-        evaluate_agents(ppo_agent, random_agent, args.games)
-        # Evaluate PPO vs DDQN
-        evaluate_agents(ppo_agent, ddqn_agent, args.games)
+    def check_winner(self, players):
+        for player in players:
+            if player.captured_territories >= self.winning_territories:
+                return player
+        return None
+
+
+class GameState:
+    def __init__(self):
+        self.round = 1
+        self.total_states = 0
+        self.current_player_idx = 0
+        self.game_over = False
+        self.max_rounds = 100  # Safety limit
+
+    def increment_state(self):
+        self.total_states += 1
+
+    def switch_player(self):
+        self.current_player_idx = 1 - self.current_player_idx
+
+    def start_new_round(self):
+        self.round += 1
+        if self.round > self.max_rounds:
+            self.game_over = True
+            print(f"Game ended due to reaching maximum rounds ({self.max_rounds})")
+
+    def print_game_state(self, board, current_player):
+        print(f"\nSTART ROUND {self.round}\n")
+        print("New Board:")
+        print(board.format_board())
+        
+        print(f"Player {current_player.get_player_number()} starts this round")
+        print(f"Current player: {current_player.get_player_number()}")
+        
+        options = [opt for opt in board.territories[current_player.player_id]
+                  if board.board[current_player.get_row(), opt] > 0]
+        print(f"Player {current_player.get_player_number()} action options {options}")
+
+    def print_move_result(self, board, current_player):
+        print("\nCALCULATING REWARD ...")
+        
+        print("\nGAME STATE SAVING ...")
+        print(board.format_board())
+        print("GAME STATE SAVED ...")
+        self.total_states += 1
+        print(f"Total states saved ({self.total_states})")
+        
+        print("\nCurrent stores state:")
+        print(f"[{board.stores[0]} {board.stores[1]}]")
+        print("Current territory count:")
+        print(f"[{len(board.territories[0])} {len(board.territories[1])}]")
+
+        print("Switch Players ...")
+        self.switch_player()
+        print(f"Current player: {(self.current_player_idx + 1)}")
+        
+        next_player = self.current_player_idx
+        valid_options = [opt for opt in board.territories[next_player]
+                        if board.board[1 if next_player else 0, opt] > 0]
+        print(f"Player {next_player + 1} action options {valid_options}")
+
+
+class GameController:
+    def __init__(self):
+        self.board = Board()
+        self.players = [Player(0), Player(1)]
+        self.rule_engine = RuleEngine()
+        self.state = GameState()
+
+    def play_turn(self):
+        try:
+            current_player = self.players[self.state.current_player_idx]
+            opponent = self.players[1 - self.state.current_player_idx]
+            
+            # Check if current player has valid moves
+            if not self.board.has_valid_moves(current_player.player_id):
+                print(f"Player {current_player.get_player_number()} has no valid moves")
+                self.state.switch_player()
+                return
+
+            action = current_player.select_move(self.board, self.board.territories[current_player.player_id])
+            if action is None:
+                print(f"Player {current_player.get_player_number()} has no valid moves")
+                self.state.switch_player()
+                return
+
+            print(f"\nPlayer {current_player.get_player_number()} chooses action: {action}")
+
+            final_row, final_col = self.rule_engine.execute_move(current_player, action, self.board)
+            self.rule_engine.check_capture(current_player, opponent, final_row, final_col, self.board)
+            self.state.print_move_result(self.board, current_player)
+
+            winner = self.rule_engine.check_winner(self.players)
+            if winner:
+                self.state.game_over = True
+                print(f"\nGame Over! Player {winner.get_player_number()} wins!")
+                print(f"Final territory captures: {[p.captured_territories for p in self.players]}")
+
+        except Exception as e:
+            print(f"Error in play_turn: {e}")
+            self.state.game_over = True
+
+    def play(self):
+        try:
+            while not self.state.game_over:
+                self.state.print_game_state(self.board, self.players[self.state.current_player_idx])
+                self.play_turn()
+                
+                if self.board.is_empty():
+                    self.state.start_new_round()
+                    self.board.reset()
+
+        except Exception as e:
+            print(f"Error in play: {e}")
 
 
 if __name__ == "__main__":
-    main()
+    game = GameController()
+    game.play()
