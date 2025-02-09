@@ -8,11 +8,11 @@ Oware is a strategic two-player game played on a board with 12 pits (6 per playe
 
 ## Project Overview
 
-We've built two AI agents that can learn and play Oware:
+I've built two AI agents that can learn and play Oware:
 1. A Double Deep Q-Network (DDQN) agent that learns by estimating the value of different moves
 2. A Proximal Policy Optimization (PPO) agent that learns by directly improving its strategy
 
-We also included a random-move agent as a baseline for comparison.
+I also included a random-move agent as a baseline for comparison.
 
 ## Project Structure
 
