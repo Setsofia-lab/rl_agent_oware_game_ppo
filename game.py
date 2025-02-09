@@ -1,21 +1,16 @@
 import numpy as np
 import random
 
+
 class Board:
     def __init__(self):
         self.board = np.full((2, 6), 4)
         self.stores = [0, 0]
         self.territories = [[0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5]]
-        self.captured_territories = [0, 0]
 
     def reset(self):
         self.board = np.full((2, 6), 4)
         self.stores = [0, 0]
-
-    def capture_seeds(self, player, row, col):
-        seeds = self.board[row, col]
-        self.stores[player] += seeds
-        self.board[row, col] = 0
 
     def is_empty(self):
         return self.board.sum() == 0
@@ -34,12 +29,9 @@ class Board:
 class Player:
     def __init__(self, player_id):
         self.player_id = player_id
-        self.score = 0
         self.captured_territories = 0
 
     def select_move(self, board, valid_moves):
-        # For now, implementing random selection
-        # Could be extended for AI or human input
         return random.choice(valid_moves)
 
     def get_row(self):
@@ -51,7 +43,7 @@ class Player:
 
 class RuleEngine:
     def __init__(self):
-        self.winning_territories = 3
+        self.winning_territories = 6
 
     def is_valid_move(self, player, action, board):
         row = player.get_row()
@@ -78,8 +70,14 @@ class RuleEngine:
             final_col in board.territories[opponent.player_id]):
             board.territories[opponent.player_id].remove(final_col)
             board.territories[player.player_id].append(final_col)
-            board.captured_territories[player.player_id] += 1
+
             player.captured_territories += 1
+            opponent.captured_territories -= 1
+
+            # Capture the seeds
+            captured_seeds = board.board[final_row, final_col]
+            board.board[final_row, final_col] = 0
+            board.stores[player.player_id] += captured_seeds
 
     def check_winner(self, players):
         for player in players:
@@ -94,6 +92,7 @@ class GameState:
         self.total_states = 0
         self.current_player_idx = 0
         self.game_over = False
+        self.max_rounds = 100  # Add a maximum number of rounds
 
     def increment_state(self):
         self.total_states += 1
@@ -103,38 +102,31 @@ class GameState:
 
     def start_new_round(self):
         self.round += 1
+        if self.round > self.max_rounds:  # End the game if max rounds reached
+            self.game_over = True
 
     def print_game_state(self, board, current_player):
         print(f"\nSTART ROUND {self.round}\n")
         print("New Board:")
         print(board.format_board())
-        
         print(f"Player {current_player.get_player_number()} starts this round")
-        print(f"Current player: {current_player.get_player_number()}")
-        
-        options = board.territories[current_player.player_id]
-        print(f"Player {current_player.get_player_number()} action options {options}")
+        print(f"Player {current_player.get_player_number()} action options {board.territories[current_player.player_id]}")
 
     def print_move_result(self, board, current_player):
         print("\nCALCULATING REWARD ...")
-        
         print("\nGAME STATE SAVING ...")
         print(board.format_board())
         print("GAME STATE SAVED ...")
-        self.total_states += 1
+        self.increment_state()
         print(f"Total states saved ({self.total_states})")
-        
         print("\nCurrent stores state:")
         print(f"[{board.stores[0]} {board.stores[1]}]")
         print("Current territory count:")
         print(f"[{len(board.territories[0])} {len(board.territories[1])}]")
-
         print("Switch Players ...")
         self.switch_player()
         print(f"Current player: {(self.current_player_idx + 1)}")
-        
-        options = board.territories[self.current_player_idx]
-        print(f"Player {self.current_player_idx + 1} action options {options}")
+        print(f"Player {self.current_player_idx + 1} action options {board.territories[self.current_player_idx]}")
 
 
 class GameController:
@@ -160,15 +152,18 @@ class GameController:
             self.state.game_over = True
             print(f"\nGame Over! Player {winner.get_player_number()} wins!")
             print(f"Final territory captures: {[p.captured_territories for p in self.players]}")
+            return
+
+        if self.board.is_empty():
+            self.state.start_new_round()
+            self.board.reset()
 
     def play(self):
         while not self.state.game_over:
             self.state.print_game_state(self.board, self.players[self.state.current_player_idx])
             self.play_turn()
-            
-            if self.board.is_empty():
-                self.state.start_new_round()
-                self.board.reset()
+
+        input("\nPress Enter to exit...")
 
 
 if __name__ == "__main__":
