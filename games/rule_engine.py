@@ -41,4 +41,3 @@ class RuleEngine:
             if player.captured_territories >= self.winning_territories:
                 return player
         return None
-
